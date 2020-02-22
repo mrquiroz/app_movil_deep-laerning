@@ -1,5 +1,6 @@
 import React, { Component } from 'react';
-import ImagePicker from 'react-native-image-picker';
+import ImagePickerManager from 'react-native-image-picker';
+import ImagePicker from 'react-native-image-crop-picker';
 import { Platform, StyleSheet, Image,Modal, Text, View,TouchableOpacity, Alert,ActivityIndicator} from 'react-native';
 import ScalableText from 'react-native-text';
 import AwesomeAlert from 'react-native-awesome-alerts';
@@ -29,9 +30,6 @@ export default class Clasificador extends Component {
           };
     }
 
-    adaptar(resultado){
-
-    }
       clasificar() {
         const options = {
           takePhotoButtonTitle: "Tomar una fotografia",
@@ -43,7 +41,9 @@ export default class Clasificador extends Component {
             path: 'images',
           },
         };
-        ImagePicker.showImagePicker(options, (response) => {
+
+      
+      ImagePickerManager.showImagePicker(options, (response) => {
           if (response.didCancel) {
             console.log('User cancelled image picker');
           } else if (response.error) {
@@ -51,14 +51,22 @@ export default class Clasificador extends Component {
           } else if (response.customButton) {
             console.log('User tapped custom button: ', response.customButton);
           } else {
-            var path = Platform.OS === 'ios' ? response.uri : 'file://' + response.path;
-            var w = response.width;
-            var h = response.height;
-            this.setState({loading:true})
-            fetch('http://54.237.193.93/predict_m', {
+            ImagePicker.clean().then(() => {
+              console.log('removed all tmp images from tmp directory');
+            }).catch(e => {
+              alert(e);
+            });
+            ImagePicker.openCropper({
+              path: 'file://' + response.path,
+              width: 224,
+              height: 224,
+              includeBase64:true
+            }).then(image => {
+              this.setState({loading:true})
+              fetch('http://54.237.193.93/predict_m', {
                       method: 'POST',
                       body: JSON.stringify({
-                        data:response.data
+                        data:image.data
                       }),
                   })
                   .then(response => response.json())
@@ -69,17 +77,18 @@ export default class Clasificador extends Component {
                       this.setState({color_mensaje:'red'})
                       this.setState({mensaje:'Dados nuestro analisis, te recomendamos ir donde un especialista'})
                   } 
-                  if (response["class_name"]== 'Melanocytic nevi') {
+                  else{
                     this.setState({color_mensaje:'green'})
                     this.setState({mensaje:'No hemos encontrado nada raro en tu lunar'})
-                } 
+                  }
                     this.setState({loading:false})
                     this.setState({showAlert:true})
+                    this.setState({
+                      source: { uri: image.path },
+                      imageHeight: 224,
+                      imageWidth: 224
+                    });
                   })
-            this.setState({
-              source: { uri: path },
-              imageHeight: h * width / w,
-              imageWidth: width
             });
           }
         });
